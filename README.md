@@ -79,6 +79,7 @@ It mounts as a regular flash drive — no drivers, no vendor software.
 | `rc5cat push <file.wav> --slot N [--name X] [--oneshot]` | Upload a 44.1 kHz stereo WAV into a slot |
 | `rc5cat clean` | Remove AppleDouble junk from the volume |
 | `rc5cat doctor` | Full health check — run this if the pedal won't boot |
+| `rc5cat ui` | All of the above in your browser — see below |
 
 Every mutating command automatically backs up the configs first
 (`--no-backup` to skip, `--backup-dir` to relocate), writes **both** memory
@@ -88,6 +89,25 @@ sweeps metadata junk. Always eject the volume before unplugging.
 `push` uploads the audio *and* writes the slot configuration in one step.
 Prefer the pedal to do its own bookkeeping? Use `push --no-config`, reboot the
 pedal (it indexes new files at boot), then `rename` the slot.
+
+## The browser UI
+
+Not a terminal person? `rc5cat ui` opens a local page in your browser:
+
+```console
+$ npx -y github:AliceLafox/rc5cat ui
+rc5cat ui at http://127.0.0.1:5023/  (Ctrl-C to stop)
+```
+
+Click a slot name to rename it, click the playback badge to switch between
+loop and One Shot, and drag a WAV from Finder straight onto a slot row to
+upload it. Health problems show up as banners at the top.
+
+![rc5cat ui — slot table in the browser](docs/ui.png)
+
+Everything runs on your machine: the page is served on `127.0.0.1` only,
+every action requires a per-run token, and foreign `Host` headers are
+rejected — nothing is ever reachable from the network.
 
 ## How the RC-5 stores data
 
@@ -127,8 +147,11 @@ and derives tempo parameters with this exact algorithm:
   in `Measure`.
 
 `rc5cat push` reproduces this algorithm bit-for-bit (it is pinned by tests to
-values a real pedal computed), so a pushed slot is indistinguishable from a
-pedal-indexed one.
+values a real pedal computed) **and pre-normalizes the file into the pedal's
+canonical form before writing it** (verified byte-identical against files the
+pedal normalized itself). The result: a pushed slot is indistinguishable from
+a pedal-indexed one, the pedal never rewrites your upload at boot — and your
+long filenames survive, which is more than the vendor path can say.
 
 **Audio formats.** The pedal records natively in WAV 44.1 kHz **32-bit float**
 stereo, and Roland's import documentation additionally lists 16-bit and 24-bit
