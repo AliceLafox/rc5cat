@@ -18,6 +18,7 @@ Commands:
         [--name NAME] [--oneshot] [--no-config] [--force]
   clean                           Remove AppleDouble junk (._*, .DS_Store)
   doctor                          Full health check of the pedal's filesystem
+  ui [--port N]                   Open the browser UI (default port 5023)
 
 Global options:
   --volume PATH                   Pedal volume (default: /Volumes/BOSS RC-5)
@@ -49,6 +50,7 @@ function main() {
       force: { type: 'boolean' },
       'no-backup': { type: 'boolean' },
       'backup-dir': { type: 'string' },
+      port: { type: 'string' },
       help: { type: 'boolean', short: 'h' },
     },
   });
@@ -136,6 +138,20 @@ function main() {
       if (findings.length === 0) console.log('all clear — the pedal should boot happily');
       for (const f of findings) console.log(`[${f.level}] ${f.message}`);
       if (findings.some((f) => f.level === 'error')) process.exitCode = 1;
+      break;
+    }
+    case 'ui': {
+      const vol = volume();
+      import('../lib/server.js').then(async ({ startUi }) => {
+        const port = values.port === undefined ? 5023 : Number(values.port);
+        if (!Number.isInteger(port) || port < 1 || port > 65535)
+          throw new Error(`invalid port: ${values.port}`);
+        const started = await startUi({ volume: vol, backupDir: values['backup-dir'], port });
+        const url = `http://127.0.0.1:${started.port}/`;
+        console.log(`rc5cat ui at ${url}  (Ctrl-C to stop)`);
+        if (process.platform === 'darwin')
+          (await import('node:child_process')).spawn('open', [url], { stdio: 'ignore' });
+      }).catch((e) => { console.error(`rc5cat: ${e.message}`); process.exit(1); });
       break;
     }
     default:
