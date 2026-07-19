@@ -5,7 +5,8 @@ Name your memory slots from a real keyboard, upload backing tracks from your DAW
 and keep the pedal's USB storage healthy — all in seconds instead of an evening
 of knob-scrolling.
 
-Zero dependencies. Node.js ≥ 20. macOS / Linux.
+Zero dependencies. Node.js ≥ 20. macOS / Windows / Linux
+(exercised against real hardware on macOS; reports from other platforms welcome).
 
 ```console
 $ rc5cat ls
@@ -67,7 +68,9 @@ $ npm test        # full suite: no network, no pedal required
 ## Usage
 
 Connect the pedal via USB and enter `STORAGE` mode (SETUP → USB → STORAGE).
-It mounts as a regular flash drive — no drivers, no vendor software.
+It mounts as a regular flash drive — no drivers, no vendor software. rc5cat
+finds it automatically by content (so a renamed volume still works); pass
+`--volume` to point at it explicitly.
 
 | Command | What it does |
 |---|---|
@@ -182,6 +185,16 @@ parser chokes on them at boot. Every rc5cat write ends with a sweep, and
   state (captured byte-for-byte from real hardware).
 - Everything above is locked by tests (`npm test`), including golden parameter
   values captured from real hardware.
+
+## On Windows
+
+Everything should work the same: the pedal mounts as a drive letter with the
+same `ROLAND\DATA` / `ROLAND\WAVE` layout, rc5cat auto-detects it (or pass
+`--volume E:\`), and `clean` also sweeps Windows litter (`Thumbs.db`,
+`desktop.ini`). The AppleDouble landmine is macOS-only — Windows users are
+safe from that one. Use "Safely Remove Hardware" before unplugging.
+Caveat: developed and hardware-verified on macOS; Windows reports are very
+welcome.
 
 ## Compatibility
 
