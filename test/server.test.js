@@ -19,7 +19,7 @@ beforeEach(async () => {
     Buffer.from(buildMemoryText({ tailMarker: 0x38 }), 'latin1'));
   fs.writeFileSync(path.join(volume, 'ROLAND', 'DATA', 'MEMORY2.RC0'),
     Buffer.from(buildMemoryText({ tailMarker: 0x39 }), 'latin1'));
-  srv = await startUi({ volume, backupDir: backups, port: 0 });
+  srv = await startUi({ volume, backupDir: backups, trashDir: path.join(backups, 'trash'), port: 0 });
 });
 
 afterEach(() => {
@@ -42,6 +42,7 @@ test('state reports slots, wav filenames and health', async () => {
   fs.writeFileSync(path.join(volume, 'ROLAND', 'WAVE', '002_1', 'drums.wav'), 'x');
   const s = await (await fetch(base() + '/api/state')).json();
   assert.equal(s.slots.length, 99);
+  assert.equal(s.trashPath, path.join(backups, 'trash'), 'state must expose the resolved trash path');
   assert.deepEqual(s.slots[1].files, ['drums.wav']);
   assert.deepEqual(s.slots[0].files, []);
   // junk sidecars must never appear as slot content
@@ -136,6 +137,28 @@ test('clean sweeps junk via API', async () => {
   const s = await res.json();
   assert.equal(s.swept.length, 1);
   assert.deepEqual(s.findings, []);
+});
+
+test('wav download keeps meaningful names, renames technical ones; bad token refused', async () => {
+  await call('/api/push?slot=5&file=my-take.wav&name=My Loop', {
+    method: 'POST', body: makeWav({ frames: 100000 }),
+  });
+  const bad = await fetch(base() + '/api/wav?slot=5&token=wrong');
+  assert.equal(bad.status, 403);
+  const res = await fetch(base() + `/api/wav?slot=5&token=${srv.token}`);
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get('content-disposition'), /filename="my-take\.wav"/);
+  const body = Buffer.from(await res.arrayBuffer());
+  assert.ok(body.equals(fs.readFileSync(path.join(volume, 'ROLAND', 'WAVE', '005_1', 'my-take.wav'))));
+
+  await call('/api/push?slot=6&file=TRACK-~1.WAV&name=Recorded', {
+    method: 'POST', body: makeWav({ frames: 100000 }),
+  });
+  const tech = await fetch(base() + `/api/wav?slot=6&token=${srv.token}`);
+  assert.match(tech.headers.get('content-disposition'), /filename="06 - Recorded\.wav"/);
+
+  const empty = await fetch(base() + `/api/wav?slot=9&token=${srv.token}`);
+  assert.equal(empty.status, 404);
 });
 
 test('unknown routes 404', async () => {

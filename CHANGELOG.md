@@ -4,6 +4,29 @@ All notable changes to rc5cat. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [semver](https://semver.org/).
 
+## [0.5.0] — 2026-07-20
+
+### Added
+
+- **`rc5cat pull <slot...> | --all`** (and a ⬇ button in the UI) — copy slot
+  audio from the pedal to disk, e.g. loops recorded on the device. Files are
+  named smartly: a meaningful original filename (your DAW export) is kept;
+  pedal-technical names (DOS 8.3 artifacts like `FIFTH-~2.WAV`) become
+  `"NN - Slot Name.wav"`; duplicates across slots get the slot number prefix
+  instead of silently overwriting. `--raw-names` always keeps the on-pedal
+  filename, existing files are never overwritten without `--force`, and the
+  pedal is only ever read from.
+- **Upload via file dialog** — an ⬆ button on every slot row, and the
+  empty-row label ("drop a WAV here, or click to choose") now opens a file
+  picker; drag-and-drop still works.
+
+### Fixed
+
+- A stale tab (rc5cat restarted since the page loaded) used to fail
+  cryptically — downloads even saved a `wav.json` error file. Downloads now
+  go through fetch with readable errors, and any stale-token failure shows
+  "page is out of date" and reloads the tab automatically.
+
 ## [0.4.0] — 2026-07-20
 
 ### Added

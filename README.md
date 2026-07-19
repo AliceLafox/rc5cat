@@ -80,6 +80,7 @@ finds it automatically by content (so a renamed volume still works); pass
 | `rc5cat rename <slot> <name>` | Set a slot's display name (≤ 12 ASCII chars) |
 | `rc5cat oneshot --on\|--off <slot...>` | Toggle One Shot playback per slot |
 | `rc5cat push <file.wav> --slot N [--name X] [--oneshot]` | Upload a 44.1 kHz stereo WAV into a slot |
+| `rc5cat pull <slot...> \| --all [--to DIR]` | Copy slot audio to disk — meaningful filenames are kept, pedal-technical ones become `"NN - Slot Name.wav"` |
 | `rc5cat clear <slot...> [--keep-name]` | Reset slots to factory state; the wav goes to `~/.rc5cat/trash`, never straight to oblivion |
 | `rc5cat clean` | Remove AppleDouble junk from the volume |
 | `rc5cat doctor` | Full health check — run this if the pedal won't boot |
@@ -105,8 +106,9 @@ rc5cat ui at http://127.0.0.1:5023/  (Ctrl-C to stop)
 
 Click a slot name to rename it, click the playback badge to switch between
 loop and One Shot, drag a WAV from Finder straight onto a slot row to upload
-it, and hit ✕ to clear a slot (the wav is moved to the trash folder on your
-computer first). Health problems show up as banners at the top.
+it, hit ⬇ to download a slot's audio to your computer (loops you recorded on
+the pedal included), and ✕ to clear a slot (the wav is moved to the trash
+folder on your computer first). Health problems show up as banners at the top.
 
 ![rc5cat ui — slot table in the browser](docs/ui.png)
 
@@ -192,7 +194,9 @@ Everything should work the same: the pedal mounts as a drive letter with the
 same `ROLAND\DATA` / `ROLAND\WAVE` layout, rc5cat auto-detects it (or pass
 `--volume E:\`), and `clean` also sweeps Windows litter (`Thumbs.db`,
 `desktop.ini`). The AppleDouble landmine is macOS-only — Windows users are
-safe from that one. Use "Safely Remove Hardware" before unplugging.
+safe from that one. Backups and the clear-trash live under your user profile
+(`%USERPROFILE%\.rc5cat\`); the UI always shows the exact path it uses.
+Use "Safely Remove Hardware" before unplugging.
 Caveat: developed and hardware-verified on macOS; Windows reports are very
 welcome.
 

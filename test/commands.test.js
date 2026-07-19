@@ -202,6 +202,94 @@ test('factory template matches the synthetic virgin fixture structurally', () =>
   assert.equal(rc0.getField(body, 'RecTmp'), 1200);
 });
 
+test('pull keeps a meaningful original filename and copies byte-identical', () => {
+  const out = fs.mkdtempSync(path.join(os.tmpdir(), 'rc5cat-pull-'));
+  const wav = path.join(os.tmpdir(), `my-song-drums-v01.wav`);
+  fs.writeFileSync(wav, makeWav({ frames: 100000 }));
+  try {
+    commands.push(volume, wav, 5, { name: 'My Loop', backupDir: backups });
+    const pulled = commands.pull(volume, [5], { to: out });
+    assert.equal(pulled.length, 1);
+    assert.equal(path.basename(pulled[0].dest), 'my-song-drums-v01.wav');
+    assert.ok(fs.readFileSync(pulled[0].dest).equals(
+      fs.readFileSync(path.join(volume, 'ROLAND', 'WAVE', '005_1', 'my-song-drums-v01.wav'))));
+  } finally {
+    fs.rmSync(wav);
+    fs.rmSync(out, { recursive: true });
+  }
+});
+
+test('pull renames pedal-technical filenames to "NN - Slot Name.wav"', () => {
+  const out = fs.mkdtempSync(path.join(os.tmpdir(), 'rc5cat-pull-'));
+  const wav = path.join(os.tmpdir(), 'FIFTH-~2.WAV');
+  fs.writeFileSync(wav, makeWav({ frames: 100000 }));
+  try {
+    commands.push(volume, wav, 8, { name: 'My Loop', backupDir: backups });
+    const pulled = commands.pull(volume, [8], { to: out });
+    assert.equal(path.basename(pulled[0].dest), '08 - My Loop.wav');
+  } finally {
+    fs.rmSync(wav);
+    fs.rmSync(out, { recursive: true });
+  }
+});
+
+test('pull disambiguates duplicate originals with the slot number instead of overwriting', () => {
+  const out = fs.mkdtempSync(path.join(os.tmpdir(), 'rc5cat-pull-'));
+  const wav = path.join(os.tmpdir(), 'same-take.wav');
+  fs.writeFileSync(wav, makeWav({ frames: 100000 }));
+  try {
+    commands.push(volume, wav, 2, { backupDir: backups });
+    commands.push(volume, wav, 3, { backupDir: backups });
+    const pulled = commands.pull(volume, [2, 3], { to: out });
+    assert.deepEqual(pulled.map((p) => path.basename(p.dest)).sort(),
+      ['02 - same-take.wav', '03 - same-take.wav']);
+  } finally {
+    fs.rmSync(wav);
+    fs.rmSync(out, { recursive: true });
+  }
+});
+
+test('isTechnicalWavName tells pedal artifacts from human names', () => {
+  assert.equal(commands.isTechnicalWavName('FIFTH-~2.WAV'), true);
+  assert.equal(commands.isTechnicalWavName('TRACK.WAV'), true);
+  assert.equal(commands.isTechnicalWavName('deep-space-is-my-home-part1-v02.wav'), false);
+  assert.equal(commands.isTechnicalWavName('Nice Song.wav'), false);
+  assert.equal(commands.isTechnicalWavName('dropped.wav'), false);
+});
+
+test('pull of an empty slot throws before anything is written', () => {
+  const out = fs.mkdtempSync(path.join(os.tmpdir(), 'rc5cat-pull-'));
+  try {
+    assert.throws(() => commands.pull(volume, [7], { to: out }), /no audio/);
+    assert.deepEqual(fs.readdirSync(out), []);
+  } finally {
+    fs.rmSync(out, { recursive: true });
+  }
+});
+
+test('pull refuses to overwrite an existing file without --force', () => {
+  const out = fs.mkdtempSync(path.join(os.tmpdir(), 'rc5cat-pull-'));
+  const wav = path.join(os.tmpdir(), `precious-take.wav`);
+  fs.writeFileSync(wav, makeWav({ frames: 100000 }));
+  try {
+    commands.push(volume, wav, 6, { name: 'Loop', backupDir: backups });
+    fs.writeFileSync(path.join(out, 'precious-take.wav'), 'precious');
+    assert.throws(() => commands.pull(volume, [6], { to: out }), /--force/);
+    assert.equal(fs.readFileSync(path.join(out, 'precious-take.wav'), 'utf8'), 'precious');
+    commands.pull(volume, [6], { to: out, force: true });
+    assert.notEqual(fs.readFileSync(path.join(out, 'precious-take.wav'), 'utf8'), 'precious');
+  } finally {
+    fs.rmSync(wav);
+    fs.rmSync(out, { recursive: true });
+  }
+});
+
+test('wavFileName sanitizes hostile slot names for the filesystem', () => {
+  assert.equal(commands.wavFileName(7, 'A/B:C*D"    '), '07 - A_B_C_D_.wav');
+  assert.equal(commands.wavFileName(13, 'Test   Tubes'), '13 - Test Tubes.wav');
+  assert.equal(commands.wavFileName(3, '            '), '03 - Memory03.wav');
+});
+
 test('doctor flags junk, wrong trailers, and config/folder mismatches', () => {
   fs.writeFileSync(path.join(volume, 'ROLAND', 'WAVE', '001_1', '._bad'), 'x');
   // wrong trailer on MEMORY2 — the exact mistake that bricked a real boot
