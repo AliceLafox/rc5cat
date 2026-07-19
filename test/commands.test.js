@@ -129,6 +129,79 @@ test('push refuses mono audio', () => {
   }
 });
 
+test('clear moves the wav to trash and resets the slot to factory state', () => {
+  const trash = fs.mkdtempSync(path.join(os.tmpdir(), 'rc5cat-trash-'));
+  const wav = path.join(os.tmpdir(), `rc5cat-clr-${process.pid}.wav`);
+  fs.writeFileSync(wav, makeWav({ frames: 100000 }));
+  try {
+    commands.push(volume, wav, 8, { name: 'Doomed', oneShot: true, backupDir: backups });
+    const wavBytes = fs.readFileSync(path.join(volume, 'ROLAND', 'WAVE', '008_1', path.basename(wav)));
+
+    const { trashed } = commands.clear(volume, [8], { trashDir: trash, backupDir: backups });
+
+    assert.equal(trashed.length, 1);
+    assert.ok(fs.readFileSync(trashed[0]).equals(wavBytes), 'trashed wav differs from original');
+    assert.deepEqual(fs.readdirSync(path.join(volume, 'ROLAND', 'WAVE', '008_1')), [], 'slot folder not emptied');
+    assert.equal(rc0.getSlotBody(readPedal(1), 8), rc0.factorySlotBody(8), 'slot not factory-reset');
+    assert.equal(rc0.getSlotBody(readPedal(2), 8), rc0.factorySlotBody(8), 'MEMORY2 not factory-reset');
+  } finally {
+    fs.rmSync(wav);
+    fs.rmSync(trash, { recursive: true });
+  }
+});
+
+test('clear --keep-name resets everything except the name', () => {
+  const trash = fs.mkdtempSync(path.join(os.tmpdir(), 'rc5cat-trash-'));
+  const wav = path.join(os.tmpdir(), `rc5cat-clr2-${process.pid}.wav`);
+  fs.writeFileSync(wav, makeWav({ frames: 100000 }));
+  try {
+    commands.push(volume, wav, 9, { name: 'Keep Me', oneShot: true, backupDir: backups });
+    commands.clear(volume, [9], { keepName: true, trashDir: trash, backupDir: backups });
+    const body = rc0.getSlotBody(readPedal(1), 9);
+    assert.equal(rc0.decodeName(body), 'Keep Me     ');
+    assert.equal(rc0.getField(body, 'WavStat'), 0);
+    assert.equal(rc0.getField(body, 'One'), 0);
+    assert.equal(body, rc0.setName(rc0.factorySlotBody(9), 'Keep Me'), 'more than the name differs from factory');
+  } finally {
+    fs.rmSync(wav);
+    fs.rmSync(trash, { recursive: true });
+  }
+});
+
+test('clear heals a ghost slot (config says audio, folder is empty)', () => {
+  const trash = fs.mkdtempSync(path.join(os.tmpdir(), 'rc5cat-trash-'));
+  try {
+    // forge a ghost: configured audio, no file
+    let text = fs.readFileSync(path.join(volume, 'ROLAND', 'DATA', 'MEMORY1.RC0'), 'latin1');
+    let body = rc0.getSlotBody(text, 11);
+    body = rc0.setField(body, 'WavStat', 1);
+    body = rc0.setField(body, 'WavLen', 12345);
+    fs.writeFileSync(path.join(volume, 'ROLAND', 'DATA', 'MEMORY1.RC0'),
+      Buffer.from(rc0.replaceSlotBody(text, 11, body), 'latin1'));
+
+    const { trashed } = commands.clear(volume, [11], { trashDir: trash, backupDir: backups });
+    assert.deepEqual(trashed, []);
+    assert.equal(rc0.getSlotBody(readPedal(1), 11), rc0.factorySlotBody(11));
+  } finally {
+    fs.rmSync(trash, { recursive: true });
+  }
+});
+
+test('clear of an invalid slot throws and leaves the pedal untouched', () => {
+  const before = readPedal(1);
+  assert.throws(() => commands.clear(volume, [100], { backupDir: backups }), /out of range/);
+  assert.throws(() => commands.clear(volume, [0], { backupDir: backups }), /out of range/);
+  assert.equal(readPedal(1), before);
+});
+
+test('factory template matches the synthetic virgin fixture structurally', () => {
+  const body = rc0.factorySlotBody(42);
+  assert.equal(rc0.decodeName(body), 'Memory42    ');
+  assert.equal(rc0.getField(body, 'WavStat'), 0);
+  assert.equal(rc0.getField(body, 'Measure'), 1);
+  assert.equal(rc0.getField(body, 'RecTmp'), 1200);
+});
+
 test('doctor flags junk, wrong trailers, and config/folder mismatches', () => {
   fs.writeFileSync(path.join(volume, 'ROLAND', 'WAVE', '001_1', '._bad'), 'x');
   // wrong trailer on MEMORY2 — the exact mistake that bricked a real boot

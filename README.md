@@ -77,6 +77,7 @@ It mounts as a regular flash drive — no drivers, no vendor software.
 | `rc5cat rename <slot> <name>` | Set a slot's display name (≤ 12 ASCII chars) |
 | `rc5cat oneshot --on\|--off <slot...>` | Toggle One Shot playback per slot |
 | `rc5cat push <file.wav> --slot N [--name X] [--oneshot]` | Upload a 44.1 kHz stereo WAV into a slot |
+| `rc5cat clear <slot...> [--keep-name]` | Reset slots to factory state; the wav goes to `~/.rc5cat/trash`, never straight to oblivion |
 | `rc5cat clean` | Remove AppleDouble junk from the volume |
 | `rc5cat doctor` | Full health check — run this if the pedal won't boot |
 | `rc5cat ui` | All of the above in your browser — see below |
@@ -100,8 +101,9 @@ rc5cat ui at http://127.0.0.1:5023/  (Ctrl-C to stop)
 ```
 
 Click a slot name to rename it, click the playback badge to switch between
-loop and One Shot, and drag a WAV from Finder straight onto a slot row to
-upload it. Health problems show up as banners at the top.
+loop and One Shot, drag a WAV from Finder straight onto a slot row to upload
+it, and hit ✕ to clear a slot (the wav is moved to the trash folder on your
+computer first). Health problems show up as banners at the top.
 
 ![rc5cat ui — slot table in the browser](docs/ui.png)
 
@@ -174,6 +176,10 @@ parser chokes on them at boot. Every rc5cat write ends with a sweep, and
 - Writes go to both memory files, are re-read and compared, and are refused
   loudly on any validation error — no silent fallbacks anywhere.
 - Automatic dated backups before every mutation; `rc5cat backup` for manual ones.
+- `clear` is the only operation that removes audio from the pedal — so it
+  never deletes outright: the wav is moved to a dated folder under
+  `~/.rc5cat/trash` first, and the slot is reset to the pedal's exact factory
+  state (captured byte-for-byte from real hardware).
 - Everything above is locked by tests (`npm test`), including golden parameter
   values captured from real hardware.
 
