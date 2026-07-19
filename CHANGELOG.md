@@ -4,6 +4,21 @@ All notable changes to rc5cat. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [semver](https://semver.org/).
 
+## [0.3.0] — 2026-07-19
+
+### Added
+
+- **`rc5cat clear <slot...>`** (and a ✕ button in the UI) — reset slots to
+  factory state. The slot config is restored to the pedal's exact virgin
+  form, captured byte-for-byte from real hardware (with its non-obvious
+  factory values: `Measure=1`, rhythm `Reverb=30`, `Fill=1`, `Stop=1`).
+  `--keep-name` resets everything except the display name. Also heals
+  "ghost" slots whose config references audio that is no longer there.
+- **Trash safety net** — `clear` is the only rc5cat operation that removes
+  audio, so it never deletes outright: the wav is moved to a dated folder
+  under `~/.rc5cat/trash` (`--trash-dir` to relocate) before the slot is
+  reset.
+
 ## [0.2.0] — 2026-07-19
 
 ### Added

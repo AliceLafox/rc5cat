@@ -114,6 +114,22 @@ test('push of a broken wav reports the reason and leaves the slot empty', async 
   assert.deepEqual(fs.readdirSync(path.join(volume, 'ROLAND', 'WAVE', '009_1')), []);
 });
 
+test('clear via API trashes the wav and factory-resets the slot', async () => {
+  const push = await call('/api/push?slot=4&file=doomed.wav&name=Doomed', {
+    method: 'POST', body: makeWav({ frames: 100000 }),
+  });
+  assert.equal(push.status, 200);
+  const res = await call('/api/clear', { method: 'POST', body: JSON.stringify({ slot: 4 }) });
+  assert.equal(res.status, 200);
+  const s = await res.json();
+  assert.equal(s.trashed.length, 1);
+  assert.ok(fs.existsSync(s.trashed[0]), 'trashed wav missing on disk');
+  assert.equal(s.slots[3].hasAudio, false);
+  assert.equal(s.slots[3].name, 'Memory04    ');
+  assert.deepEqual(fs.readdirSync(path.join(volume, 'ROLAND', 'WAVE', '004_1')), []);
+  fs.rmSync(path.dirname(path.dirname(s.trashed[0])), { recursive: true });
+});
+
 test('clean sweeps junk via API', async () => {
   fs.writeFileSync(path.join(volume, 'ROLAND', 'WAVE', '001_1', '._junk'), 'x');
   const res = await call('/api/clean', { method: 'POST' });

@@ -16,6 +16,8 @@ Commands:
   oneshot --on|--off <slot...>    Toggle One Shot playback for slots
   push <file.wav> --slot N        Upload a backing track into a slot
         [--name NAME] [--oneshot] [--no-config] [--force]
+  clear <slot...> [--keep-name]   Reset slots to factory state; the wav is
+                                  moved to ~/.rc5cat/trash, never just deleted
   clean                           Remove AppleDouble junk (._*, .DS_Store)
   doctor                          Full health check of the pedal's filesystem
   ui [--port N]                   Open the browser UI (default port 5023)
@@ -50,6 +52,8 @@ function main() {
       force: { type: 'boolean' },
       'no-backup': { type: 'boolean' },
       'backup-dir': { type: 'string' },
+      'keep-name': { type: 'boolean' },
+      'trash-dir': { type: 'string' },
       port: { type: 'string' },
       help: { type: 'boolean', short: 'h' },
     },
@@ -127,6 +131,18 @@ function main() {
       }
       break;
     }
+    case 'clear': {
+      if (args.length === 0) throw new Error('usage: rc5cat clear <slot...> [--keep-name]');
+      const result = commands.clear(volume(), args.map(parseSlot), {
+        keepName: values['keep-name'] ?? false,
+        trashDir: values['trash-dir'],
+        ...writeOpts,
+      });
+      for (const f of result.trashed) console.log(`trashed: ${f}`);
+      if (!result.trashed.length) console.log('no audio to trash — config reset only');
+      reportWrite(result);
+      break;
+    }
     case 'clean': {
       const removed = sweepJunk(volume());
       for (const f of removed) console.log(`removed: ${f}`);
@@ -146,7 +162,9 @@ function main() {
         const port = values.port === undefined ? 5023 : Number(values.port);
         if (!Number.isInteger(port) || port < 1 || port > 65535)
           throw new Error(`invalid port: ${values.port}`);
-        const started = await startUi({ volume: vol, backupDir: values['backup-dir'], port });
+        const started = await startUi({
+          volume: vol, backupDir: values['backup-dir'], trashDir: values['trash-dir'], port,
+        });
         const url = `http://127.0.0.1:${started.port}/`;
         console.log(`rc5cat ui at ${url}  (Ctrl-C to stop)`);
         if (process.platform === 'darwin')
