@@ -4,6 +4,18 @@ All notable changes to rc5cat. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [semver](https://semver.org/).
 
+## [0.4.0] — 2026-07-20
+
+### Added
+
+- **Volume auto-detection** — the pedal is found by content
+  (`ROLAND/DATA` + `ROLAND/WAVE`) across `/Volumes` (macOS), drive letters
+  (Windows) and `/media`, `/run/media`, `/mnt` (Linux), so a renamed volume
+  still works; `--volume` remains as the explicit override.
+- **Windows friendliness** — `Thumbs.db` and `desktop.ini` join the junk
+  sweep, `rc5cat ui` opens the browser on Windows and Linux too, and the
+  README documents the Windows workflow.
+
 ## [0.3.0] — 2026-07-19
 
 ### Added

@@ -23,7 +23,7 @@ Commands:
   ui [--port N]                   Open the browser UI (default port 5023)
 
 Global options:
-  --volume PATH                   Pedal volume (default: /Volumes/BOSS RC-5)
+  --volume PATH                   Pedal volume (default: auto-detected)
   --no-backup                     Skip automatic config backup before writing
   --backup-dir DIR                Where automatic backups go (default: ~/.rc5cat/backups)
 
@@ -167,8 +167,10 @@ function main() {
         });
         const url = `http://127.0.0.1:${started.port}/`;
         console.log(`rc5cat ui at ${url}  (Ctrl-C to stop)`);
-        if (process.platform === 'darwin')
-          (await import('node:child_process')).spawn('open', [url], { stdio: 'ignore' });
+        const { spawn } = await import('node:child_process');
+        if (process.platform === 'darwin') spawn('open', [url], { stdio: 'ignore' });
+        else if (process.platform === 'win32') spawn('cmd', ['/c', 'start', '', url], { stdio: 'ignore' });
+        else spawn('xdg-open', [url], { stdio: 'ignore' }).on('error', () => {});
       }).catch((e) => { console.error(`rc5cat: ${e.message}`); process.exit(1); });
       break;
     }

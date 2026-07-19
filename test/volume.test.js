@@ -17,12 +17,27 @@ test('slot numbers outside 1..99 throw', () => {
   assert.throws(() => vol.slotDirName(NaN));
 });
 
-test('junk detection catches AppleDouble and .DS_Store but NOT ordinary dotfiles', () => {
+test('junk detection catches macOS and Windows litter but NOT ordinary files', () => {
   assert.equal(vol.isJunkName('._track.wav'), true);
   assert.equal(vol.isJunkName('.DS_Store'), true);
+  assert.equal(vol.isJunkName('Thumbs.db'), true);
+  assert.equal(vol.isJunkName('desktop.ini'), true);
   assert.equal(vol.isJunkName('track.wav'), false);
-  // never delete arbitrary hidden files — we only claim the two known offenders
+  // never delete arbitrary hidden files — only the known offenders
   assert.equal(vol.isJunkName('.gitignore'), false);
+  assert.equal(vol.isJunkName('thumbs.db.wav'), false);
+});
+
+test('detectVolume finds the pedal by content, not by label', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rc5cat-det-'));
+  const notPedal = path.join(root, 'USB STICK');
+  const pedal = path.join(root, 'RENAMED THING');
+  fs.mkdirSync(path.join(notPedal, 'photos'), { recursive: true });
+  fs.mkdirSync(path.join(pedal, 'ROLAND', 'DATA'), { recursive: true });
+  fs.mkdirSync(path.join(pedal, 'ROLAND', 'WAVE'), { recursive: true });
+  assert.equal(vol.detectVolume([notPedal, pedal, '/nonexistent/x']), pedal);
+  assert.equal(vol.detectVolume([notPedal, '/nonexistent/x']), undefined);
+  fs.rmSync(root, { recursive: true });
 });
 
 test('sweepJunk removes junk recursively and leaves real files alone', () => {
