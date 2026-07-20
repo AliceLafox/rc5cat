@@ -18,7 +18,7 @@
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text);
     font: 15px/1.45 -apple-system, "Segoe UI", system-ui, sans-serif; }
-  .wrap { max-width: 780px; margin: 0 auto; padding: 24px 16px 64px; }
+  .wrap { max-width: 1000px; margin: 0 auto; padding: 24px 16px 64px; }
   header { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 6px; }
   h1 { font-size: 22px; margin: 0; }
   h1 .paw { font-size: 18px; }
@@ -41,9 +41,12 @@
   thead th { border-top: none; color: var(--dim); font-size: 12px; font-weight: 600;
     text-transform: uppercase; letter-spacing: .04em; }
   td.num { color: var(--dim); font-variant-numeric: tabular-nums; width: 2.5em; }
-  td.audio { color: var(--dim); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  td.nameCol { width: calc(12ch + 26px); }
+  td.playCol { width: 6.5em; }
+  td.audio { color: var(--dim); font-variant-numeric: tabular-nums; }
+  td.audio .dur { white-space: nowrap; }
   td.audio .file { font-family: ui-monospace, Menlo, monospace; font-size: 11px;
-    max-width: 24ch; overflow: hidden; text-overflow: ellipsis; }
+    overflow-wrap: anywhere; }
   input.name { font: inherit; font-family: ui-monospace, Menlo, monospace; font-size: 14px;
     width: calc(12ch + 14px); padding: 3px 6px; border-radius: 6px; border: 1px solid transparent;
     background: transparent; color: var(--text); }
@@ -56,7 +59,12 @@
   tr.busy { animation: busyPulse .9s ease-in-out infinite alternate; }
   tr.busy .clearBtn { pointer-events: none; opacity: .4; }
   @keyframes busyPulse { from { opacity: 1; } to { opacity: .45; } }
-  td.actions { width: 2em; text-align: center; }
+  td.actions { width: 6.5em; text-align: right; white-space: nowrap; }
+  .dlBtn, .upBtn { cursor: pointer; border: none; background: none; color: var(--dim);
+    font-size: 14px; padding: 2px 6px; border-radius: 6px; }
+  .dlBtn:hover, .upBtn:hover { color: var(--accent); background: var(--bg); border: none; }
+  td.audio .pick { cursor: pointer; }
+  td.audio .pick:hover { color: var(--accent); }
   .clearBtn { cursor: pointer; border: none; background: none; color: var(--dim);
     font-size: 15px; padding: 2px 6px; border-radius: 6px; }
   .clearBtn:hover { color: var(--err); background: var(--bg); border: none; }
@@ -85,11 +93,14 @@
     <thead><tr><th>#</th><th>Name</th><th>Playback</th><th>Audio</th><th></th></tr></thead>
     <tbody id="rows"></tbody>
   </table>
-  <p class="hint">Click a name to edit (12 ASCII chars max, Enter to save). Click the playback
-    badge to toggle One Shot. Drag a 44.1&nbsp;kHz stereo WAV onto a slot row to upload it.
+  <p class="hint">Click a name to edit (the pedal's display fits 12 ASCII chars; Enter to save).
+    Click the playback badge to toggle One Shot. Upload a 44.1&nbsp;kHz stereo WAV by dragging
+    it onto a slot row, or click ⬆ / the empty-row label to choose a file. ⬇ downloads a slot's
+    audio to your computer, ✕ clears the slot (the wav goes to <code id="trashPath">the local trash folder</code> first).
     When you're done: <b>eject the volume, then reboot the pedal</b>.</p>
 </div>
 <div id="toast"></div>
+<input type="file" id="filePicker" accept=".wav,audio/wav,audio/x-wav" style="display:none">
 <script>
 const TOKEN = '__TOKEN__';
 let current = null;
@@ -120,6 +131,15 @@ async function api(path, opts = {}) {
   return data;
 }
 
+// a stale tab (server restarted since the page loaded) fails with "bad token"
+// on everything — reload to pick up the fresh one instead of confusing the user
+function handleApiError(e) {
+  if (String(e.message).includes('bad token')) {
+    toast('this page is out of date (rc5cat was restarted) — reloading…', true);
+    setTimeout(() => location.reload(), 1500);
+  } else toast(e.message, true);
+}
+
 // fetch() cannot report upload progress — XHR can
 function uploadWithProgress(path, body, onProgress) {
   return new Promise((resolve, reject) => {
@@ -143,6 +163,7 @@ function render(s) {
   current = s;
   $('#meta').textContent =
     `${s.volume} · ${fmtGB(s.freeBytes)} free · ${s.slotsWithAudio}/99 slots with audio`;
+  if (s.trashPath) $('#trashPath').textContent = s.trashPath;
 
   const findings = $('#findings');
   findings.innerHTML = '';
@@ -177,6 +198,7 @@ function render(s) {
     num.textContent = String(slot.slot).padStart(2, '0');
 
     const nameTd = document.createElement('td');
+    nameTd.className = 'nameCol';
     const name = document.createElement('input');
     name.className = 'name';
     name.maxLength = 12;
@@ -195,6 +217,7 @@ function render(s) {
     nameTd.appendChild(name);
 
     const oneTd = document.createElement('td');
+    oneTd.className = 'playCol';
     const badge = document.createElement('span');
     badge.className = 'oneshot' + (slot.oneShot ? ' on' : '');
     badge.textContent = slot.oneShot ? 'one shot' : 'loop';
@@ -209,9 +232,21 @@ function render(s) {
 
     const audio = document.createElement('td');
     audio.className = 'audio';
-    audio.textContent = slot.hasAudio
-      ? `${fmtDur(slot.frames)} · ${(slot.tempoTenths / 10).toFixed(1)} bpm`
-      : (slot.files.length ? 'not indexed yet — reboot the pedal' : '— drop a WAV here');
+    if (slot.hasAudio) {
+      const dur = document.createElement('div');
+      dur.className = 'dur';
+      dur.textContent = `${fmtDur(slot.frames)} · ${(slot.tempoTenths / 10).toFixed(1)} bpm`;
+      audio.appendChild(dur);
+    } else if (slot.files.length) {
+      audio.textContent = 'not indexed yet — reboot the pedal';
+    } else {
+      const pick = document.createElement('span');
+      pick.className = 'pick';
+      pick.textContent = '— drop a WAV here, or click to choose';
+      pick.title = 'choose a WAV file to upload';
+      pick.addEventListener('click', () => openPicker(slot, tr, audio));
+      audio.appendChild(pick);
+    }
     for (const f of slot.files) {
       const file = document.createElement('div');
       file.className = 'file';
@@ -220,35 +255,7 @@ function render(s) {
       audio.appendChild(file);
     }
 
-    const actions = document.createElement('td');
-    actions.className = 'actions';
-    if (slot.hasAudio || slot.files.length) {
-      const clearBtn = document.createElement('button');
-      clearBtn.className = 'clearBtn';
-      clearBtn.textContent = '✕';
-      clearBtn.title = 'clear slot (wav goes to the trash folder on this computer)';
-      clearBtn.addEventListener('click', async () => {
-        if (!confirm(`Clear slot ${slot.slot} (“${slot.name.trim()}”)?\nThe wav is moved to ~/.rc5cat/trash on this computer, the slot resets to factory state.`)) return;
-        tr.classList.add('busy');
-        audio.textContent = `clearing — moving ${slot.files.join(', ') || 'audio'} to trash…`;
-        try {
-          const r = await api('/api/clear', { method: 'POST', body: JSON.stringify({ slot: slot.slot }) });
-          render(r);
-          toast(r.trashed.length ? `slot ${slot.slot} cleared, wav → trash` : `slot ${slot.slot} cleared`);
-        } catch (err) { toast(err.message, true); render(current); }
-      });
-      actions.appendChild(clearBtn);
-    }
-
-    tr.append(num, nameTd, oneTd, audio, actions);
-
-    tr.addEventListener('dragover', (e) => { e.preventDefault(); tr.classList.add('drop'); });
-    tr.addEventListener('dragleave', () => tr.classList.remove('drop'));
-    tr.addEventListener('drop', async (e) => {
-      e.preventDefault();
-      tr.classList.remove('drop');
-      const file = e.dataTransfer.files[0];
-      if (!file) return;
+    async function startUpload(file) {
       if (slot.hasAudio && !confirm(`Slot ${slot.slot} already has audio. Replace it?`)) return;
       const q = new URLSearchParams({ slot: slot.slot, file: file.name });
       if (slot.hasAudio) q.set('force', '1');
@@ -262,12 +269,86 @@ function render(s) {
         });
         render(fresh);
         toast(`${file.name} → slot ${slot.slot}. Eject and reboot the pedal when done.`);
-      } catch (err) { toast(err.message, true); render(current); }
+      } catch (err) { handleApiError(err); render(current); }
+    }
+    tr.startUpload = startUpload; // reachable from the shared file picker
+
+    const actions = document.createElement('td');
+    actions.className = 'actions';
+
+    const up = document.createElement('button');
+    up.className = 'upBtn';
+    up.textContent = '⬆';
+    up.title = slot.hasAudio ? 'upload a WAV to replace this slot' : 'upload a WAV into this slot';
+    up.addEventListener('click', () => openPicker(slot, tr, audio));
+    actions.appendChild(up);
+
+    if (slot.files.length) {
+      const dl = document.createElement('button');
+      dl.className = 'dlBtn';
+      dl.textContent = '⬇';
+      dl.title = 'download this wav to your computer';
+      dl.addEventListener('click', async () => {
+        try {
+          const res = await fetch(`/api/wav?slot=${slot.slot}&token=${TOKEN}`);
+          if (!res.ok) throw new Error((await res.json()).error ?? res.statusText);
+          const match = (res.headers.get('content-disposition') ?? '').match(/filename="([^"]+)"/);
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(await res.blob());
+          a.download = match ? match[1] : `slot-${slot.slot}.wav`;
+          a.click();
+          URL.revokeObjectURL(a.href);
+          toast(`downloading ${a.download}`);
+        } catch (err) { handleApiError(err); }
+      });
+      actions.appendChild(dl);
+    }
+
+    if (slot.hasAudio || slot.files.length) {
+      const clearBtn = document.createElement('button');
+      clearBtn.className = 'clearBtn';
+      clearBtn.textContent = '✕';
+      clearBtn.title = 'clear slot (wav goes to the trash folder on this computer)';
+      clearBtn.addEventListener('click', async () => {
+        if (!confirm(`Clear slot ${slot.slot} (“${slot.name.trim()}”)?\nThe wav is moved to ${current?.trashPath ?? 'the trash folder'} on this computer, the slot resets to factory state.`)) return;
+        tr.classList.add('busy');
+        audio.textContent = `clearing — moving ${slot.files.join(', ') || 'audio'} to trash…`;
+        try {
+          const r = await api('/api/clear', { method: 'POST', body: JSON.stringify({ slot: slot.slot }) });
+          render(r);
+          toast(r.trashed.length ? `slot ${slot.slot} cleared, wav → trash` : `slot ${slot.slot} cleared`);
+        } catch (err) { handleApiError(err); render(current); }
+      });
+      actions.appendChild(clearBtn);
+    }
+
+    tr.append(num, nameTd, oneTd, audio, actions);
+
+    tr.addEventListener('dragover', (e) => { e.preventDefault(); tr.classList.add('drop'); });
+    tr.addEventListener('dragleave', () => tr.classList.remove('drop'));
+    tr.addEventListener('drop', (e) => {
+      e.preventDefault();
+      tr.classList.remove('drop');
+      const file = e.dataTransfer.files[0];
+      if (file) startUpload(file);
     });
 
     rows.appendChild(tr);
   }
 }
+
+// one hidden file input serves every slot's ⬆ button and empty-row label
+let pickerTarget = null;
+function openPicker(slot, tr, audio) {
+  pickerTarget = tr;
+  $('#filePicker').click();
+}
+$('#filePicker').addEventListener('change', () => {
+  const file = $('#filePicker').files[0];
+  $('#filePicker').value = '';
+  if (file && pickerTarget && pickerTarget.startUpload) pickerTarget.startUpload(file);
+  pickerTarget = null;
+});
 
 $('#showEmpty').addEventListener('change', () => current && render(current));
 $('#cleanBtn').addEventListener('click', async () => {

@@ -16,6 +16,8 @@ Commands:
   oneshot --on|--off <slot...>    Toggle One Shot playback for slots
   push <file.wav> --slot N        Upload a backing track into a slot
         [--name NAME] [--oneshot] [--no-config] [--force]
+  pull <slot...> | --all          Copy slot audio from the pedal to disk
+       [--to DIR] [--raw-names]   (default name: "NN - Slot Name.wav")
   clear <slot...> [--keep-name]   Reset slots to factory state; the wav is
                                   moved to ~/.rc5cat/trash, never just deleted
   clean                           Remove AppleDouble junk (._*, .DS_Store)
@@ -54,6 +56,7 @@ function main() {
       'backup-dir': { type: 'string' },
       'keep-name': { type: 'boolean' },
       'trash-dir': { type: 'string' },
+      'raw-names': { type: 'boolean' },
       port: { type: 'string' },
       help: { type: 'boolean', short: 'h' },
     },
@@ -129,6 +132,18 @@ function main() {
       } else {
         console.log('config untouched — reboot the pedal and it will index the file itself');
       }
+      break;
+    }
+    case 'pull': {
+      const vol = volume();
+      const slots = values.all
+        ? commands.listSlots(commands.readMemory(vol)).filter((s) => s.hasAudio).map((s) => s.slot)
+        : args.map(parseSlot);
+      if (slots.length === 0) throw new Error('usage: rc5cat pull <slot...> | --all [--to DIR]');
+      const pulled = commands.pull(vol, slots, {
+        to: values.to, rawNames: values['raw-names'] ?? false, force: values.force ?? false,
+      });
+      for (const p of pulled) console.log(`slot ${p.slot} → ${p.dest}`);
       break;
     }
     case 'clear': {
