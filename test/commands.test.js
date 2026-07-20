@@ -168,6 +168,24 @@ test('clear --keep-name resets everything except the name', () => {
   }
 });
 
+test('clear with trash:false deletes outright and creates no trash folder', () => {
+  const trash = path.join(os.tmpdir(), `rc5cat-notrash-${process.pid}`); // must never be created
+  const wav = path.join(os.tmpdir(), `rc5cat-nt-${process.pid}.wav`);
+  fs.writeFileSync(wav, makeWav({ frames: 100000 }));
+  try {
+    commands.push(volume, wav, 7, { backupDir: backups });
+    const { trashed, deleted } = commands.clear(volume, [7],
+      { trash: false, trashDir: trash, backupDir: backups });
+    assert.deepEqual(trashed, []);
+    assert.equal(deleted.length, 1);
+    assert.ok(!fs.existsSync(trash), 'trash folder was created despite trash:false');
+    assert.deepEqual(fs.readdirSync(path.join(volume, 'ROLAND', 'WAVE', '007_1')), []);
+    assert.equal(rc0.getSlotBody(readPedal(1), 7), rc0.factorySlotBody(7));
+  } finally {
+    fs.rmSync(wav);
+  }
+});
+
 test('clear heals a ghost slot (config says audio, folder is empty)', () => {
   const trash = fs.mkdtempSync(path.join(os.tmpdir(), 'rc5cat-trash-'));
   try {

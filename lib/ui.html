@@ -88,6 +88,8 @@
     <button id="backupBtn">Backup configs</button>
     <button id="cleanBtn">Clean junk</button>
     <label class="small"><input type="checkbox" id="showEmpty"> show empty slots</label>
+    <label class="small" title="when unchecked, ✕ deletes the wav permanently">
+      <input type="checkbox" id="useTrash" checked> move cleared wavs to trash</label>
   </div>
   <table>
     <thead><tr><th>#</th><th>Name</th><th>Playback</th><th>Audio</th><th></th></tr></thead>
@@ -310,13 +312,21 @@ function render(s) {
       clearBtn.textContent = '✕';
       clearBtn.title = 'clear slot (wav goes to the trash folder on this computer)';
       clearBtn.addEventListener('click', async () => {
-        if (!confirm(`Clear slot ${slot.slot} (“${slot.name.trim()}”)?\nThe wav is moved to ${current?.trashPath ?? 'the trash folder'} on this computer, the slot resets to factory state.`)) return;
+        const useTrash = $('#useTrash').checked;
+        const question = useTrash
+          ? `Clear slot ${slot.slot} (“${slot.name.trim()}”)?\nThe wav is moved to ${current?.trashPath ?? 'the trash folder'} on this computer, the slot resets to factory state.`
+          : `Clear slot ${slot.slot} (“${slot.name.trim()}”)?\n⚠ The wav will be DELETED PERMANENTLY — no trash copy. This cannot be undone.`;
+        if (!confirm(question)) return;
         tr.classList.add('busy');
-        audio.textContent = `clearing — moving ${slot.files.join(', ') || 'audio'} to trash…`;
+        audio.textContent = useTrash
+          ? `clearing — moving ${slot.files.join(', ') || 'audio'} to trash…`
+          : `clearing — deleting ${slot.files.join(', ') || 'audio'}…`;
         try {
-          const r = await api('/api/clear', { method: 'POST', body: JSON.stringify({ slot: slot.slot }) });
+          const r = await api('/api/clear', { method: 'POST', body: JSON.stringify({ slot: slot.slot, trash: useTrash }) });
           render(r);
-          toast(r.trashed.length ? `slot ${slot.slot} cleared, wav → trash` : `slot ${slot.slot} cleared`);
+          toast(r.trashed.length ? `slot ${slot.slot} cleared, wav → trash`
+            : r.deleted.length ? `slot ${slot.slot} cleared, wav deleted permanently`
+            : `slot ${slot.slot} cleared`);
         } catch (err) { handleApiError(err); render(current); }
       });
       actions.appendChild(clearBtn);

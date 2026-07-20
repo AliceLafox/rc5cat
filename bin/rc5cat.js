@@ -19,7 +19,7 @@ Commands:
   pull <slot...> | --all          Copy slot audio from the pedal to disk
        [--to DIR] [--raw-names]   (default name: "NN - Slot Name.wav")
   clear <slot...> [--keep-name]   Reset slots to factory state; the wav is
-                                  moved to ~/.rc5cat/trash, never just deleted
+        [--no-trash]              moved to ~/.rc5cat/trash unless --no-trash
   clean                           Remove AppleDouble junk (._*, .DS_Store)
   doctor                          Full health check of the pedal's filesystem
   ui [--port N]                   Open the browser UI (default port 5023)
@@ -55,6 +55,7 @@ function main() {
       'no-backup': { type: 'boolean' },
       'backup-dir': { type: 'string' },
       'keep-name': { type: 'boolean' },
+      'no-trash': { type: 'boolean' },
       'trash-dir': { type: 'string' },
       'raw-names': { type: 'boolean' },
       port: { type: 'string' },
@@ -150,11 +151,14 @@ function main() {
       if (args.length === 0) throw new Error('usage: rc5cat clear <slot...> [--keep-name]');
       const result = commands.clear(volume(), args.map(parseSlot), {
         keepName: values['keep-name'] ?? false,
+        trash: !(values['no-trash'] ?? false),
         trashDir: values['trash-dir'],
         ...writeOpts,
       });
       for (const f of result.trashed) console.log(`trashed: ${f}`);
-      if (!result.trashed.length) console.log('no audio to trash — config reset only');
+      for (const f of result.deleted) console.log(`deleted permanently: ${f}`);
+      if (!result.trashed.length && !result.deleted.length)
+        console.log('no audio to remove — config reset only');
       reportWrite(result);
       break;
     }

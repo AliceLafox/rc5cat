@@ -131,6 +131,18 @@ test('clear via API trashes the wav and factory-resets the slot', async () => {
   fs.rmSync(path.dirname(path.dirname(s.trashed[0])), { recursive: true });
 });
 
+test('clear via API with trash:false deletes permanently, no trash folder appears', async () => {
+  await call('/api/push?slot=7&file=bye.wav', { method: 'POST', body: makeWav({ frames: 100000 }) });
+  const res = await call('/api/clear', { method: 'POST', body: JSON.stringify({ slot: 7, trash: false }) });
+  assert.equal(res.status, 200);
+  const s = await res.json();
+  assert.deepEqual(s.trashed, []);
+  assert.equal(s.deleted.length, 1);
+  assert.ok(!fs.existsSync(path.join(backups, 'trash')), 'trash folder created despite trash:false');
+  assert.deepEqual(fs.readdirSync(path.join(volume, 'ROLAND', 'WAVE', '007_1')), []);
+  assert.equal(s.slots[6].hasAudio, false);
+});
+
 test('clean sweeps junk via API', async () => {
   fs.writeFileSync(path.join(volume, 'ROLAND', 'WAVE', '001_1', '._junk'), 'x');
   const res = await call('/api/clean', { method: 'POST' });

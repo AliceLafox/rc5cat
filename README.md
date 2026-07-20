@@ -81,7 +81,7 @@ finds it automatically by content (so a renamed volume still works); pass
 | `rc5cat oneshot --on\|--off <slot...>` | Toggle One Shot playback per slot |
 | `rc5cat push <file.wav> --slot N [--name X] [--oneshot]` | Upload a 44.1 kHz stereo WAV into a slot |
 | `rc5cat pull <slot...> \| --all [--to DIR]` | Copy slot audio to disk — meaningful filenames are kept, pedal-technical ones become `"NN - Slot Name.wav"` |
-| `rc5cat clear <slot...> [--keep-name]` | Reset slots to factory state; the wav goes to `~/.rc5cat/trash`, never straight to oblivion |
+| `rc5cat clear <slot...> [--keep-name] [--no-trash]` | Reset slots to factory state; the wav goes to `~/.rc5cat/trash` unless you opt out with `--no-trash` |
 | `rc5cat clean` | Remove AppleDouble junk from the volume |
 | `rc5cat doctor` | Full health check — run this if the pedal won't boot |
 | `rc5cat ui` | All of the above in your browser — see below |
@@ -181,10 +181,12 @@ parser chokes on them at boot. Every rc5cat write ends with a sweep, and
 - Writes go to both memory files, are re-read and compared, and are refused
   loudly on any validation error — no silent fallbacks anywhere.
 - Automatic dated backups before every mutation; `rc5cat backup` for manual ones.
-- `clear` is the only operation that removes audio from the pedal — so it
-  never deletes outright: the wav is moved to a dated folder under
+- `clear` is the only operation that removes audio from the pedal — so by
+  default it never deletes outright: the wav is moved to a dated folder under
   `~/.rc5cat/trash` first, and the slot is reset to the pedal's exact factory
-  state (captured byte-for-byte from real hardware).
+  state (captured byte-for-byte from real hardware). Opting out (`--no-trash`,
+  or unchecking the UI's trash checkbox) is explicit and the confirm dialog
+  says plainly that the deletion is permanent.
 - Everything above is locked by tests (`npm test`), including golden parameter
   values captured from real hardware.
 
