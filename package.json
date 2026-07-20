@@ -1,6 +1,6 @@
 {
   "name": "rc5cat",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Command-line manager for the BOSS RC-5 Loop Station: name memory slots, upload backing tracks, keep its filesystem healthy",
   "type": "module",
   "bin": { "rc5cat": "bin/rc5cat.js" },

@@ -4,6 +4,16 @@ All notable changes to rc5cat. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [semver](https://semver.org/).
 
+## [0.6.0] — 2026-07-20
+
+### Added
+
+- **Opt-out from the clear trash safety net** — `rc5cat clear --no-trash`
+  deletes the wav outright, and the UI grows a toolbar checkbox
+  ("move cleared wavs to trash", **checked by default**). When opted out,
+  the ✕ confirm dialog states plainly that the deletion is permanent, and
+  no trash folder is created.
+
 ## [0.5.0] — 2026-07-20
 
 ### Added
