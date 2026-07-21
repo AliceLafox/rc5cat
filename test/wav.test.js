@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { readWavInfo, assertUploadable, canonicalize } from '../lib/wav.js';
 import { makeWav } from './helpers.js';
 
@@ -60,6 +61,17 @@ test('canonicalize gives float32 the pedal-style 28-byte fmt body', () => {
   assert.equal(clean.readUInt32LE(16), 28, 'fmt chunk size');
   assert.equal(clean.readUInt16LE(44 - 8), 10, 'cbSize = 10');
   assert.equal(clean.toString('ascii', 48, 52), 'data');
+});
+
+test('canonicalize float32 header is byte-identical to a real pedal-normalized file', () => {
+  const G = JSON.parse(readFileSync(new URL('../fixtures/golden.json', import.meta.url)));
+  const pedal = Buffer.from(G.canonicalFloat32Header.base64, 'base64');
+  const ours = canonicalize(makeWav({ tag: 3, bits: 32, frames: 100 })).subarray(0, 56);
+  const skip = new Set(G.canonicalFloat32Header.sizeFieldOffsets);
+  for (let i = 0; i < 56; i++) {
+    if (skip.has(i)) continue;
+    assert.equal(ours[i], pedal[i], `header byte ${i}`);
+  }
 });
 
 test('canonicalize is idempotent', () => {

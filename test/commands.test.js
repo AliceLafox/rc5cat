@@ -267,12 +267,29 @@ test('pull disambiguates duplicate originals with the slot number instead of ove
   }
 });
 
-test('isTechnicalWavName tells pedal artifacts from human names', () => {
-  assert.equal(commands.isTechnicalWavName('FIFTH-~2.WAV'), true);
-  assert.equal(commands.isTechnicalWavName('TRACK.WAV'), true);
-  assert.equal(commands.isTechnicalWavName('deep-space-is-my-home-part1-v02.wav'), false);
-  assert.equal(commands.isTechnicalWavName('Nice Song.wav'), false);
-  assert.equal(commands.isTechnicalWavName('dropped.wav'), false);
+test('isTechnicalWavName matches the golden fixture cases', () => {
+  const G = JSON.parse(fs.readFileSync(new URL('../fixtures/golden.json', import.meta.url)));
+  for (const { name, technical } of G.technicalNames)
+    assert.equal(commands.isTechnicalWavName(name), technical, name);
+});
+
+test('factory slot template matches the golden fixture values', () => {
+  const G = JSON.parse(fs.readFileSync(new URL('../fixtures/golden.json', import.meta.url)));
+  const body = rc0.factorySlotBody(42);
+  for (const section of ['TRACK1', 'MASTER', 'RHYTHM']) {
+    const block = body.match(new RegExp(`<${section}>[\\s\\S]*?</${section}>`))[0];
+    for (const [tag, value] of Object.entries(G.factorySlot[section])) {
+      if (tag.startsWith('_')) continue;
+      assert.equal(rc0.getField(block, tag), value, `${section}/${tag}`);
+    }
+  }
+});
+
+test('name encoding matches the golden fixture example', () => {
+  const G = JSON.parse(fs.readFileSync(new URL('../fixtures/golden.json', import.meta.url)));
+  const body = rc0.setName(rc0.factorySlotBody(1), G.nameEncoding.name);
+  const codes = body.match(/<C\d\d>(\d+)<\/C\d\d>/g).map((c) => parseInt(c.match(/>(\d+)</)[1], 10));
+  assert.deepEqual(codes, G.nameEncoding.codes);
 });
 
 test('pull of an empty slot throws before anything is written', () => {
