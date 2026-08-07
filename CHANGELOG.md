@@ -4,6 +4,19 @@ All notable changes to rc5cat. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [semver](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- **Trailer bytes are write-generation counters, not fixed `8`/`9` markers**
+  (#9). Hardware observation: a save on the pedal stamps the freshly written
+  bank one generation past the other (`0x3a` next to `0x39`), with no decimal
+  carry. Writes now continue the on-card count instead of rewinding it, and
+  `doctor` no longer flags a healthy pedal-recorded card as damaged — it
+  checks the trailer's structure (the actual boot-fatal condition) and warns
+  when the pair is more than one generation apart. `RC5Kit` mirrors the same
+  rule.
+
 ## [0.6.0] — 2026-07-20
 
 ### Added

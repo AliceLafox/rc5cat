@@ -72,17 +72,35 @@ test('renaming one slot leaves every other byte of the file untouched', () => {
   assert.equal(rc0.splitFile(renamed).tail, rc0.splitFile(FILE).tail, 'trailer changed');
 });
 
-test('trailer markers are read and rewritten per file number', () => {
+test('the factory-pair stamp writes 8/9 per file number', () => {
   assert.equal(rc0.tailMarker(FILE), 0x38);
   const asMemory2 = rc0.setTailMarker(FILE, 2);
   assert.equal(rc0.tailMarker(asMemory2), 0x39);
   assert.equal(rc0.splitFile(asMemory2).document, rc0.splitFile(FILE).document);
 });
 
+test('setTailGeneration stamps any byte and round-trips the document', () => {
+  // hardware observation 2026-07-24: a pedal-side save leaves 0x3a — one
+  // past '9' in raw byte order, no decimal carry
+  const saved = rc0.setTailGeneration(FILE, 0x3a);
+  assert.equal(rc0.tailMarker(saved), 0x3a);
+  assert.equal(rc0.splitFile(saved).document, rc0.splitFile(FILE).document);
+  assert.equal(rc0.tailMarker(rc0.setTailGeneration(FILE, 0x00)), 0x00);
+  assert.equal(rc0.tailMarker(rc0.setTailGeneration(FILE, 0xff)), 0xff);
+});
+
+test('setTailGeneration rejects anything that is not a byte', () => {
+  assert.throws(() => rc0.setTailGeneration(FILE, -1), /byte/);
+  assert.throws(() => rc0.setTailGeneration(FILE, 256), /byte/);
+  assert.throws(() => rc0.setTailGeneration(FILE, 8.5), /byte/);
+  assert.throws(() => rc0.setTailGeneration(FILE, '8'), /byte/);
+});
+
 test('an unrecognized trailer is reported and refused, never silently rewritten', () => {
   const oddTail = rc0.splitFile(FILE).document + '\nGARBAGE';
   assert.equal(rc0.tailMarker(oddTail), null);
   assert.throws(() => rc0.setTailMarker(oddTail, 1), /refusing/);
+  assert.throws(() => rc0.setTailGeneration(oddTail, 0x38), /refusing/);
 });
 
 test('setTailMarker validates the file number', () => {

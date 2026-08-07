@@ -29,16 +29,46 @@ afterEach(() => {
 const readPedal = (fileNo) =>
   fs.readFileSync(path.join(volume, 'ROLAND', 'DATA', `MEMORY${fileNo}.RC0`), 'latin1');
 
-test('rename writes both files with their own trailer markers', () => {
+test('rename writes both files, advancing the write-generation pair', () => {
   const { backedUp } = commands.rename(volume, 5, 'Deep Space 1', { backupDir: backups });
   const m1 = readPedal(1);
   const m2 = readPedal(2);
   assert.equal(rc0.decodeName(rc0.getSlotBody(m1, 5)), 'Deep Space 1');
   assert.equal(rc0.decodeName(rc0.getSlotBody(m2, 5)), 'Deep Space 1');
-  assert.equal(rc0.tailMarker(m1), 0x38);
-  assert.equal(rc0.tailMarker(m2), 0x39);
+  // on-card pair was 8/9 — the write stamps one and two past the highest
+  assert.equal(rc0.tailMarker(m1), 0x3a);
+  assert.equal(rc0.tailMarker(m2), 0x3b);
   assert.equal(rc0.splitFile(m1).document, rc0.splitFile(m2).document);
   assert.ok(fs.existsSync(path.join(backedUp.dest, 'MEMORY1.RC0')), 'backup missing');
+});
+
+test("writes continue the pedal's generation count instead of rewinding it", () => {
+  // the state a save on the device leaves behind: the fresh bank one ahead
+  fs.writeFileSync(path.join(volume, 'ROLAND', 'DATA', 'MEMORY1.RC0'),
+    Buffer.from(buildMemoryText({ tailMarker: 0x3a }), 'latin1'));
+  commands.rename(volume, 5, 'Fresh Take', { backupDir: backups });
+  assert.equal(rc0.tailMarker(readPedal(1)), 0x3b);
+  assert.equal(rc0.tailMarker(readPedal(2)), 0x3c);
+});
+
+test('an unreadable bank cannot vote; the write heals it', () => {
+  fs.writeFileSync(path.join(volume, 'ROLAND', 'DATA', 'MEMORY2.RC0'), 'GARBAGE');
+  commands.rename(volume, 5, 'Heal Me', { backupDir: backups });
+  const m1 = readPedal(1);
+  const m2 = readPedal(2);
+  assert.equal(rc0.splitFile(m1).document, rc0.splitFile(m2).document);
+  // base comes from MEMORY1 alone (0x38)
+  assert.equal(rc0.tailMarker(m1), 0x39);
+  assert.equal(rc0.tailMarker(m2), 0x3a);
+});
+
+test('with no readable bank the count restarts at the factory pair', () => {
+  const text = buildMemoryText();
+  fs.writeFileSync(path.join(volume, 'ROLAND', 'DATA', 'MEMORY1.RC0'), 'GARBAGE');
+  fs.writeFileSync(path.join(volume, 'ROLAND', 'DATA', 'MEMORY2.RC0'), 'GARBAGE');
+  commands.writeMemoryPair(volume, text, { backupDir: backups });
+  assert.equal(rc0.tailMarker(readPedal(1)), 0x38);
+  assert.equal(rc0.tailMarker(readPedal(2)), 0x39);
 });
 
 test('rename leaves all other slots byte-identical', () => {
@@ -325,18 +355,43 @@ test('wavFileName sanitizes hostile slot names for the filesystem', () => {
   assert.equal(commands.wavFileName(3, '            '), '03 - Memory03.wav');
 });
 
-test('doctor flags junk, wrong trailers, and config/folder mismatches', () => {
+test('doctor flags junk, malformed trailers, and config/folder mismatches', () => {
   fs.writeFileSync(path.join(volume, 'ROLAND', 'WAVE', '001_1', '._bad'), 'x');
-  // wrong trailer on MEMORY2 — the exact mistake that bricked a real boot
+  // structurally broken trailer — the boot-fatal LOOPER DATA READ ERR shape
   fs.writeFileSync(path.join(volume, 'ROLAND', 'DATA', 'MEMORY2.RC0'),
-    Buffer.from(buildMemoryText({ tailMarker: 0x38 }), 'latin1'));
+    Buffer.from(buildMemoryText().slice(0, -4) + 'GARB', 'latin1'));
   // unindexed wav
   fs.writeFileSync(path.join(volume, 'ROLAND', 'WAVE', '002_1', 'new.wav'), 'x');
 
   const findings = commands.doctor(volume);
   assert.ok(findings.some((f) => f.level === 'error' && f.message.includes('AppleDouble')), 'junk not flagged');
-  assert.ok(findings.some((f) => f.level === 'error' && f.message.includes('MEMORY2') && f.message.includes('trailer')), 'trailer not flagged');
+  assert.ok(findings.some((f) => f.level === 'error' && f.message.includes('MEMORY2') && f.message.includes('malformed')), 'trailer not flagged');
   assert.ok(findings.some((f) => f.level === 'info' && f.message.includes('reboot')), 'unindexed wav not flagged');
+});
+
+test('doctor accepts a healthy pedal-recorded card (issue #9)', () => {
+  // hardware 2026-07-24: a save on the device leaves 0x3a next to 0x39 —
+  // the old fixed-8/9 rule called this healthy card damaged
+  fs.writeFileSync(path.join(volume, 'ROLAND', 'DATA', 'MEMORY1.RC0'),
+    Buffer.from(buildMemoryText({ tailMarker: 0x3a }), 'latin1'));
+  assert.deepEqual(commands.doctor(volume), []);
+});
+
+test('a freshly saved pedal pair reads as info, never as damage', () => {
+  // right after a save the fresh bank differs in content too
+  const base = buildMemoryText({ tailMarker: 0x3a });
+  const fresh = rc0.replaceSlotBody(base, 3, rc0.setName(rc0.getSlotBody(base, 3), 'Fresh Loop'));
+  fs.writeFileSync(path.join(volume, 'ROLAND', 'DATA', 'MEMORY1.RC0'), Buffer.from(fresh, 'latin1'));
+  const findings = commands.doctor(volume);
+  assert.ok(findings.every((f) => f.level === 'info'), JSON.stringify(findings));
+  assert.ok(findings.some((f) => f.message.includes('differ') && f.message.includes('0x3a')), 'differ note missing');
+});
+
+test('doctor warns when the generation pair is more than one step apart', () => {
+  fs.writeFileSync(path.join(volume, 'ROLAND', 'DATA', 'MEMORY1.RC0'),
+    Buffer.from(buildMemoryText({ tailMarker: 0x52 }), 'latin1'));
+  const findings = commands.doctor(volume);
+  assert.ok(findings.some((f) => f.level === 'warn' && f.message.includes('0x52') && f.message.includes('0x39')), 'spread not flagged');
 });
 
 test('doctor is silent on a healthy volume', () => {
