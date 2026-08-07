@@ -88,8 +88,8 @@ finds it automatically by content (so a renamed volume still works); pass
 
 Every mutating command automatically backs up the configs first
 (`--no-backup` to skip, `--backup-dir` to relocate), writes **both** memory
-files with their correct per-file trailers, re-reads them to verify, and
-sweeps metadata junk. Always eject the volume before unplugging.
+files continuing the pedal's own write-generation trailers, re-reads them to
+verify, and sweeps metadata junk. Always eject the volume before unplugging.
 
 `push` uploads the audio *and* writes the slot configuration in one step.
 Prefer the pedal to do its own bookkeeping? Use `push --no-config`, reboot the
@@ -141,10 +141,16 @@ names are twelve ASCII codes in `<C01>…<C12>`. The two files carry the same
 content; on boot, if `MEMORY2` fails validation, the pedal heals it from
 `MEMORY1`.
 
-**The trailer.** After `</database>` each file ends with four extra bytes that
-look like garbage but are a **per-file marker**: `8\0\0\0` for MEMORY1,
-`9\0\0\0` for MEMORY2. Write the wrong marker and the pedal greets you with
-`LOOPER DATA READ ERR`. rc5cat always writes the right one and `doctor` checks it.
+**The trailer.** After `</database>` each file ends with four extra bytes,
+`<byte>\0\0\0` — and the byte is a **write-generation counter**, not a fixed
+marker. A factory-fresh card holds the pair at `8`/`9`; every save on the
+pedal stamps the freshly written bank one generation past the highest on the
+card, bumping the raw byte with no decimal carry (`8`, `9`, `:`, `;`, …), so
+a just-saved card sits at e.g. `0x3a`/`0x39` and the pair reconciles on the
+next boot. Only a structurally broken trailer triggers
+`LOOPER DATA READ ERR`. rc5cat continues the on-card count on every write
+instead of rewinding it, and `doctor` checks the trailer's shape and the
+pair's spread.
 
 **Boot-time indexing.** Drop a WAV into an empty slot folder and reboot: the
 pedal finds it, fills the slot config itself, normalizes the file (strips DAW

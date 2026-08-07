@@ -64,17 +64,28 @@ import Testing
         #expect(try RC0.splitFile(renamed).tail == RC0.splitFile(file).tail)
     }
 
-    @Test func trailerMarkersAreReadAndRewrittenPerFile() throws {
+    @Test func factoryPairStampWrites8And9PerFile() throws {
         #expect(try RC0.tailMarker(file) == UInt8(Golden.shared.tailMarkers["memory1"]!))
         let asMemory2 = try RC0.setTailMarker(file, fileNo: 2)
         #expect(try RC0.tailMarker(asMemory2) == UInt8(Golden.shared.tailMarkers["memory2"]!))
         #expect(try RC0.splitFile(asMemory2).document == RC0.splitFile(file).document)
     }
 
+    @Test func tailGenerationStampsAnyByteAndRoundTripsDocument() throws {
+        // hardware observation 2026-07-24: a pedal-side save leaves 0x3a —
+        // one past "9" in raw byte order, no decimal carry
+        let saved = try RC0.setTailGeneration(file, generation: 0x3a)
+        #expect(try RC0.tailMarker(saved) == 0x3a)
+        #expect(try RC0.splitFile(saved).document == RC0.splitFile(file).document)
+        #expect(try RC0.tailMarker(RC0.setTailGeneration(file, generation: 0x00)) == 0x00)
+        #expect(try RC0.tailMarker(RC0.setTailGeneration(file, generation: 0xff)) == 0xff)
+    }
+
     @Test func unrecognizedTrailerIsRefusedNeverRewritten() throws {
         let odd = try RC0.splitFile(file).document + "\nGARBAGE"
         #expect(try RC0.tailMarker(odd) == nil)
         #expect(throws: RC0.Error.self) { try RC0.setTailMarker(odd, fileNo: 1) }
+        #expect(throws: RC0.Error.self) { try RC0.setTailGeneration(odd, generation: 0x38) }
     }
 
     @Test func factoryTemplateMatchesGoldenFixtures() throws {

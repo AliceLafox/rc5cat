@@ -71,14 +71,15 @@ test('requests with a foreign Host header are rejected (DNS rebinding)', async (
   assert.equal(status, 403);
 });
 
-test('rename via API lands on the pedal with both trailers intact', async () => {
+test('rename via API lands on the pedal, advancing the generation pair', async () => {
   const res = await call('/api/rename', { method: 'POST', body: JSON.stringify({ slot: 7, name: 'Deep Space 1' }) });
   assert.equal(res.status, 200);
   const s = await res.json();
   assert.equal(s.slots[6].name, 'Deep Space 1');
   const m2 = fs.readFileSync(path.join(volume, 'ROLAND', 'DATA', 'MEMORY2.RC0'), 'latin1');
   assert.equal(rc0.decodeName(rc0.getSlotBody(m2, 7)), 'Deep Space 1');
-  assert.equal(rc0.tailMarker(m2), 0x39);
+  // the write continues the on-card count (was 8/9) instead of rewinding it
+  assert.equal(rc0.tailMarker(m2), 0x3b);
 });
 
 test('a bad name comes back as a readable error, not a 500', async () => {

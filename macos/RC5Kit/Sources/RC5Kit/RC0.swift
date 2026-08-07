@@ -2,15 +2,23 @@ import Foundation
 
 /// MEMORY*.RC0 model — byte-safe surgical editing.
 ///
-/// The RC-5's parser is strict and every memory file carries a per-file
-/// trailer after `</database>` (MEMORY1 ends with `8\0\0\0`, MEMORY2 with
-/// `9\0\0\0`; a wrong trailer triggers "LOOPER DATA READ ERR" on boot).
+/// The RC-5's parser is strict and every memory file carries a trailer
+/// after `</database>`: `<generation>\0\0\0`, where the generation byte is
+/// a write counter, not a fixed marker. The factory ships the pair at
+/// `8`/`9`; a save on the pedal stamps the freshly written bank one
+/// generation past the highest on the card, bumping the raw byte with no
+/// decimal carry (`8`, `9`, `:`, `;`, … — observed on hardware:
+/// MEMORY1=0x3a next to MEMORY2=0x39). A structurally broken trailer
+/// triggers "LOOPER DATA READ ERR" on boot; any counter value is legal.
 /// The invariant of this module: any byte we were not explicitly asked to
 /// change is reproduced exactly. Files are handled as Latin-1 strings so
 /// every byte round-trips unharmed.
 public enum RC0 {
     public static let slotCount = 99
     public static let nameLength = 12
+    /// The factory-fresh generation pair (fixtures and fresh volumes). The
+    /// trailer byte is really a write-generation counter — see
+    /// `setTailGeneration`.
     public static let tailMarkers: [Int: UInt8] = [1: 0x38, 2: 0x39]
 
     public struct Error: Swift.Error, CustomStringConvertible {
@@ -166,14 +174,22 @@ public enum RC0 {
         return UInt8(first.value)
     }
 
-    public static func setTailMarker(_ text: String, fileNo: Int) throws -> String {
-        guard let marker = tailMarkers[fileNo] else {
-            throw Error("fileNo must be 1 or 2, got \(fileNo)")
-        }
+    /// Restamp the trailer with an explicit write generation. The document
+    /// bytes are untouched; a structurally unrecognized trailer is refused,
+    /// never silently rewritten.
+    public static func setTailGeneration(_ text: String, generation: UInt8) throws -> String {
         guard try tailMarker(text) != nil else {
             throw Error("unrecognized trailer after </database>; refusing to rewrite it")
         }
         return String(text.unicodeScalars.dropLast(4))
-            + String(UnicodeScalar(marker)) + "\0\0\0"
+            + String(UnicodeScalar(generation)) + "\0\0\0"
+    }
+
+    /// The factory-pair stamp (fixtures and fresh volumes).
+    public static func setTailMarker(_ text: String, fileNo: Int) throws -> String {
+        guard let marker = tailMarkers[fileNo] else {
+            throw Error("fileNo must be 1 or 2, got \(fileNo)")
+        }
+        return try setTailGeneration(text, generation: marker)
     }
 }
