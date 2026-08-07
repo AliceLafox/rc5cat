@@ -116,6 +116,11 @@ Everything runs on your machine: the page is served on `127.0.0.1` only,
 every action requires a per-run token, and foreign `Host` headers are
 rejected — nothing is ever reachable from the network.
 
+Prefer a real app to a browser tab? **[LooperCat](https://github.com/darwinscat/loopercat)**
+is the native macOS companion built on rc5cat's format knowledge — slot table
+with waveforms, playback, trim, and one-click STORAGE mode over USB-MIDI, no
+terminal and no trips through the pedal's SETUP menu.
+
 ## How the RC-5 stores data
 
 Documented nowhere else, verified byte-by-byte against real hardware. This is
