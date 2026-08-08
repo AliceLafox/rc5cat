@@ -4,7 +4,7 @@ All notable changes to rc5cat. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [semver](https://semver.org/).
 
-## [Unreleased]
+## [0.7.0] — 2026-08-08
 
 ### Fixed
 
